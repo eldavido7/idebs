@@ -49,7 +49,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold">HIT Dashboard</CardTitle>
+          <CardTitle className="text-2xl font-bold">IDEBS Dashboard</CardTitle>
           <CardDescription>
             Enter your credentials to access the admin dashboard
           </CardDescription>
@@ -99,7 +99,7 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter className="text-center text-sm text-muted-foreground">
           <p className="w-full">
-            Demo credentials: admin@hit.com / admin123
+            Demo credentials: admin@idebs.com / admin123
           </p>
         </CardFooter>
       </Card>

@@ -27,11 +27,37 @@ import type { Product, ProductVariant } from "@/types";
 
 // --- Category + Subcategory map ---
 const CATEGORY_MAP: Record<string, string[]> = {
-  Clothing: ["T-Shirts", "Sweatshirts", "Caps", "Bags"],
-  "Health & Nutrition": ["Protein Formula", "Supplements"],
-  Mugs: ["Ceramic", "Glass"],
-  Journals: ["Notebooks", "Planners"],
-  Stickers: ["Vinyl", "Paper"],
+  "Men's Fashion": [
+    "Shoes",
+    "Shirts",
+    "Trousers",
+    "Belts",
+    "Accessories"
+  ],
+  "Women's Fashion": [
+    "Shoes",
+    "Dresses",
+    "Bags",
+    "Trousers/Skirts",
+    "Shirts/Tops",
+    "Belts",
+    "Accessories"
+  ],
+  "Unisex / General": [
+    "Perfumes & Fragrances",
+    "Sunglasses & Eyewear",
+    "Other Accessories"
+  ],
+  "Store Services": [
+    "Dressing Room",
+    "Gift Wrapping & Packaging",
+    "Special Orders / Pre-Orders"
+  ],
+  "Seasonal / Collections": [
+    "New Arrivals",
+    "Luxury Collection",
+    "Discount / Clearance"
+  ]
 };
 
 interface AddProductModalProps {
