@@ -12,6 +12,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "IDEBS - Admin Dashboard",
   description: "A comprehensive eCommerce admin dashboard",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
