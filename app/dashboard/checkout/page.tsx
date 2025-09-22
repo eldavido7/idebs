@@ -47,6 +47,8 @@ export default function CashierCheckout() {
     const [showSearchResults, setShowSearchResults] = useState(false);
     const [showReceiptModal, setShowReceiptModal] = useState(false); // New state for modal
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const [receiptCart, setReceiptCart] = useState<CartItem[]>([]); // Add this line
+    const [receiptTotals, setReceiptTotals] = useState({ subtotal: 0, discountAmount: 0, total: 0 });
 
     useEffect(() => {
         const loadData = async () => {
@@ -253,10 +255,16 @@ export default function CashierCheckout() {
 
             await addOrder(orderData);
 
-            // Clear cart and show receipt modal
+            // Store cart and totals for receipt BEFORE clearing
+            setReceiptCart([...cart]); // Copy current cart
+            setReceiptTotals({ subtotal, discountAmount, total }); // Store current totals
+
+            // Show receipt modal first
+            setShowReceiptModal(true);
+
+            // Then clear the cart for new orders
             setCart([]);
             setSelectedDiscountId("none");
-            setShowReceiptModal(true); // Show modal on success
 
             toast({
                 title: "Checkout Complete",
@@ -505,32 +513,66 @@ export default function CashierCheckout() {
                         <div className="print-only">
                             <h2 className="text-2xl font-bold text-center mb-4">IDEBS</h2>
                             <h3 className="text-lg font-semibold mb-4">Receipt</h3>
-                            <div className="mb-4">
-                                {cart.map((item, index) => {
-                                    const product = products.find((p) => p.id === item.productId);
-                                    const variant = item.variantId
-                                        ? product?.variants?.find((v) => v.id === item.variantId)
-                                        : null;
-                                    const price = variant?.price ?? product?.price ?? 0;
-                                    const itemTotal = price * item.quantity;
 
-                                    return (
-                                        <div key={index} className="flex justify-between mb-2">
-                                            <span>
-                                                {product?.title}
-                                                {variant && ` (${variant.name})`} × {item.quantity}
-                                            </span>
-                                            <span>₦{itemTotal.toFixed(2)}</span>
+                            {/* Receipt details */}
+                            <div className="mb-4">
+                                <div className="text-sm text-muted-foreground mb-2">
+                                    Date: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
+                                </div>
+
+                                {/* Cart items - use receiptCart instead of cart */}
+                                {receiptCart.length > 0 ? (
+                                    receiptCart.map((item, index) => {
+                                        const product = products.find((p) => p.id === item.productId);
+                                        const variant = item.variantId
+                                            ? product?.variants?.find((v) => v.id === item.variantId)
+                                            : null;
+                                        const price = variant?.price ?? product?.price ?? 0;
+                                        const itemTotal = price * item.quantity;
+
+                                        return (
+                                            <div key={index} className="flex justify-between mb-2 text-sm">
+                                                <span className="flex-1">
+                                                    {product?.title || "Unknown Product"}
+                                                    {variant && ` (${variant.name})`} × {item.quantity}
+                                                </span>
+                                                <span className="ml-4 font-medium">₦{itemTotal.toFixed(2)}</span>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="text-center text-muted-foreground py-4">
+                                        No items in cart
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Totals - use receiptTotals instead of the current state values */}
+                            {receiptCart.length > 0 && (
+                                <>
+                                    <div className="flex justify-between text-sm border-t pt-2">
+                                        <span>Subtotal:</span>
+                                        <span>₦{receiptTotals.subtotal.toFixed(2)}</span>
+                                    </div>
+                                    {receiptTotals.discountAmount > 0 && (
+                                        <div className="flex justify-between text-sm">
+                                            <span>Discount:</span>
+                                            <span className="text-green-600">-₦{receiptTotals.discountAmount.toFixed(2)}</span>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                            <div className="flex justify-between font-bold border-t pt-2">
-                                <span>Total:</span>
-                                <span>₦{total.toFixed(2)}</span>
-                            </div>
-                            <p className="text-center mt-4">Thank you for shopping with IDEBS!</p>
+                                    )}
+                                    <div className="flex justify-between font-bold border-t pt-2">
+                                        <span>Total:</span>
+                                        <span>₦{receiptTotals.total.toFixed(2)}</span>
+                                    </div>
+                                </>
+                            )}
+
+                            <p className="text-center mt-6 text-sm text-muted-foreground">
+                                Thank you for shopping with IDEBS!
+                            </p>
                         </div>
+
+                        {/* Action buttons */}
                         <div className="flex justify-end gap-4 mt-6 print:hidden">
                             <Button variant="outline" onClick={() => setShowReceiptModal(false)}>
                                 Close
