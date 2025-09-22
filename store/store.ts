@@ -180,6 +180,9 @@ export const useStore = create<StoreState>((set, get) => ({
       const subtotal = itemsWithSubtotal.reduce((sum, item) => sum + item.subtotal, 0);
       let shippingCost = 0;
 
+      // Determine if this is an admin checkout
+      const isAdminCheckout = Boolean(order.cashierId);
+
       // Validate shipping option
       if (order.shippingOptionId) {
         const shippingOption = shippingOptions.find((s) => s.id === order.shippingOptionId);
@@ -191,7 +194,14 @@ export const useStore = create<StoreState>((set, get) => ({
           throw new Error("Provided shipping cost does not match selected option");
         }
       } else if (order.shippingCost !== undefined && order.shippingCost !== 0) {
-        throw new Error("Shipping cost provided without shipping option");
+        if (!isAdminCheckout) {
+          throw new Error("Shipping cost provided without shipping option");
+        }
+      }
+
+      // For admin checkout, default to no shipping cost if not specified
+      if (isAdminCheckout && !order.shippingOptionId) {
+        shippingCost = 0;
       }
 
       // Validate and apply discount
@@ -236,6 +246,7 @@ export const useStore = create<StoreState>((set, get) => ({
         total,
         discount,
         paymentReference: order.paymentReference || null,
+        status: order.status || "PENDING", // Include status, default to PENDING if not provided
       };
 
       const res = await fetch("/api/orders", {
@@ -754,7 +765,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   createUser: async (user) => {
-    const payload = { name: user.name, email: user.email, password: user.password };
+    const payload = { name: user.name, email: user.email, password: user.password, role: user.role };
     const res = await fetch("/api/settings/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

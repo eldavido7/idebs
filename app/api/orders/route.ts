@@ -46,6 +46,7 @@ export async function POST(req: Request) {
             state,
             postalCode,
             country,
+            cashierId,
             items,
             discountId,
             shippingOptionId,
@@ -53,10 +54,25 @@ export async function POST(req: Request) {
             paymentReference,
             subtotal: providedSubtotal,
             total: providedTotal,
+            status,
         } = body;
 
-        if (!firstName || !lastName || !email || !phone || !address || !city || !state || !postalCode || !country) {
-            return NextResponse.json({ error: "Missing required order fields" }, { status: 400 });
+        const isAdminCheckout = Boolean(cashierId);
+
+        if (!isAdminCheckout) {
+            // Require customer fields only for non-admin checkouts
+            if (!firstName || !lastName || !email || !phone || !address || !city || !state || !postalCode || !country) {
+                return NextResponse.json({ error: "Missing required order fields" }, { status: 400 });
+            }
+        } else {
+            // Admin checkout - verify cashier exists
+            const cashier = await prisma.user.findUnique({
+                where: { id: cashierId },
+            });
+
+            if (!cashier || cashier.role !== "CASHIER") {
+                return NextResponse.json({ error: "Invalid cashier" }, { status: 400 });
+            }
         }
 
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -72,14 +88,21 @@ export async function POST(req: Request) {
 
         let calculatedSubtotal = 0;
 
+        // Validate items and prepare inventory updates
+        const inventoryUpdates: Array<{
+            productId: string;
+            variantId?: string;
+            quantity: number;
+        }> = [];
+
         for (const item of items) {
-            // require productId always for linking (variant must belong to product)
             if (!item.productId || !item.quantity || item.quantity <= 0) {
                 return NextResponse.json({ error: "Invalid item format" }, { status: 400 });
             }
 
             const product = await prisma.product.findUnique({
                 where: { id: item.productId },
+                include: { variants: true },
             });
 
             if (!product) {
@@ -87,19 +110,26 @@ export async function POST(req: Request) {
             }
 
             const variant = item.variantId
-                ? await prisma.productVariant.findUnique({
-                    where: { id: item.variantId },
-                })
+                ? product.variants.find((v) => v.id === item.variantId)
                 : null;
 
             if (item.variantId && !variant) {
                 return NextResponse.json({ error: `Variant with ID ${item.variantId} not found` }, { status: 404 });
             }
 
-            // price fallback: variant.price -> product.price
             const unitPrice = variant?.price ?? product.price;
             if (unitPrice == null) {
                 return NextResponse.json({ error: "No valid price found for product/variant" }, { status: 400 });
+            }
+
+            // Validate inventory for DELIVERED status
+            if (isAdminCheckout && status === "DELIVERED") {
+                const currentInventory = variant ? variant.inventory : product.inventory;
+                if (currentInventory == null || currentInventory < item.quantity) {
+                    return NextResponse.json({
+                        error: `Insufficient inventory for ${variant ? `variant ${variant.name}` : `product ${product.title}`}. Available: ${currentInventory}`,
+                    }, { status: 400 });
+                }
             }
 
             const itemSubtotal = unitPrice * item.quantity;
@@ -111,6 +141,15 @@ export async function POST(req: Request) {
                 quantity: item.quantity,
                 subtotal: itemSubtotal,
             });
+
+            // Track inventory updates for DELIVERED status
+            if (isAdminCheckout && status === "DELIVERED") {
+                inventoryUpdates.push({
+                    productId: item.productId,
+                    variantId: item.variantId,
+                    quantity: item.quantity,
+                });
+            }
         }
 
         if (providedSubtotal !== calculatedSubtotal) {
@@ -133,7 +172,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Shipping cost provided without shipping option" }, { status: 400 });
         }
 
-        // ---------- Discount handling (supports products AND variants) ----------
+        // Discount handling
         let discount: Discount | null = null;
         let discountAmount = 0;
         let total = calculatedSubtotal + calculatedShippingCost;
@@ -141,7 +180,7 @@ export async function POST(req: Request) {
         if (discountId) {
             discount = await prisma.discount.findUnique({
                 where: { id: discountId },
-                include: { products: true, variants: true }, // <-- include variants
+                include: { products: true, variants: true },
             });
 
             if (
@@ -158,11 +197,9 @@ export async function POST(req: Request) {
                 return NextResponse.json({ error: "Order subtotal below minimum for discount" }, { status: 400 });
             }
 
-            // Determine applicable subtotal (only items the discount applies to)
-            const discountProductIds = (discount.products ?? []).map(p => p.id);
-            const discountVariantIds = (discount.variants ?? []).map(v => v.id);
+            const discountProductIds = (discount.products ?? []).map((p) => p.id);
+            const discountVariantIds = (discount.variants ?? []).map((v) => v.id);
 
-            // orderItems aligns with items[] order — use that mapping to sum subtotals for applicable items
             let applicableSubtotal = 0;
             for (let i = 0; i < items.length; i++) {
                 const raw = items[i];
@@ -170,7 +207,6 @@ export async function POST(req: Request) {
                 const matchesProduct = discountProductIds.length > 0 && discountProductIds.includes(raw.productId);
                 const matchesVariant = raw.variantId && discountVariantIds.length > 0 && discountVariantIds.includes(raw.variantId);
                 if (discountProductIds.length === 0 && discountVariantIds.length === 0) {
-                    // global discount -> everything applicable
                     applicableSubtotal += built.subtotal;
                 } else if (matchesProduct || matchesVariant) {
                     applicableSubtotal += built.subtotal;
@@ -183,7 +219,6 @@ export async function POST(req: Request) {
                 }
             }
 
-            // Calculate discount amount using applicableSubtotal (or whole subtotal for global)
             const baseForDiscount = ((discount.products?.length ?? 0) === 0 && (discount.variants?.length ?? 0) === 0)
                 ? calculatedSubtotal
                 : applicableSubtotal;
@@ -191,10 +226,8 @@ export async function POST(req: Request) {
             if (discount.type === "percentage") {
                 discountAmount = (discount.value / 100) * baseForDiscount;
             } else if (discount.type === "fixed_amount") {
-                // cap the fixed discount to the applicable amount so total doesn't go negative for those items
                 discountAmount = Math.min(discount.value, baseForDiscount);
             } else if (discount.type === "free_shipping") {
-                // free shipping applies if it is a global discount or applies to at least one item
                 if (baseForDiscount > 0) {
                     discountAmount = calculatedShippingCost;
                 } else {
@@ -204,8 +237,6 @@ export async function POST(req: Request) {
 
             total = Math.max(0, calculatedSubtotal + calculatedShippingCost - discountAmount);
         }
-
-        // ---------- end discount handling ----------
 
         if (providedTotal !== total) {
             return NextResponse.json({ error: "Provided total does not match calculated total" }, { status: 400 });
@@ -220,8 +251,9 @@ export async function POST(req: Request) {
             }
         }
 
-        // Create order inside transaction (no inventory change on create — inventory changes occur on status transitions)
+        // Create order and update inventory in transaction
         const order = await prisma.$transaction(async (tx) => {
+            // Create the order
             const createdOrder = await tx.order.create({
                 data: {
                     firstName,
@@ -233,11 +265,10 @@ export async function POST(req: Request) {
                     state,
                     postalCode,
                     country,
-                    status: "PENDING",
+                    cashierId,
+                    status: isAdminCheckout && status === "DELIVERED" ? "DELIVERED" : "PENDING", // Respect status for admin checkout
                     subtotal: calculatedSubtotal,
-                    shippingOption: shippingOptionId
-                        ? { connect: { id: shippingOptionId } }
-                        : undefined,
+                    shippingOption: shippingOptionId ? { connect: { id: shippingOptionId } } : undefined,
                     shippingCost: calculatedShippingCost,
                     total,
                     discount: discount ? { connect: { id: discount.id } } : undefined,
@@ -248,9 +279,28 @@ export async function POST(req: Request) {
                     items: { include: { product: true, variant: true } },
                     discount: true,
                     shippingOption: true,
+                    cashier: true,
                 },
             });
 
+            // Update inventory for DELIVERED status
+            if (isAdminCheckout && status === "DELIVERED") {
+                for (const update of inventoryUpdates) {
+                    if (update.variantId) {
+                        await tx.productVariant.update({
+                            where: { id: update.variantId },
+                            data: { inventory: { decrement: update.quantity } },
+                        });
+                    } else {
+                        await tx.product.update({
+                            where: { id: update.productId },
+                            data: { inventory: { decrement: update.quantity } },
+                        });
+                    }
+                }
+            }
+
+            // Update discount usage
             if (discount) {
                 await tx.discount.update({
                     where: { id: discount.id },

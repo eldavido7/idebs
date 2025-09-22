@@ -16,9 +16,9 @@ export async function GET() {
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { name, email, password } = body;
+        const { name, email, password, role } = body;
 
-        if (!name || !email || !password) {
+        if (!name || !email || !password || !role) {
             return NextResponse.json({ error: "Missing fields." }, { status: 400 });
         }
 
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
                 name,
                 email,
                 password: hashedPassword,
+                role, // <-- Add this line
                 lastActive: new Date().toISOString(),
             },
         });
@@ -38,4 +39,3 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Failed to create user." }, { status: 500 });
     }
 }
-

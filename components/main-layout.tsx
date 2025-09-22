@@ -22,6 +22,17 @@ export function MainLayout({ children }: MainLayoutProps) {
   const isLoginPage = pathname === "/login";
   const isStorePage = pathname.startsWith("/store");
   const isRootPage = pathname === "/"; // Add this check
+  const isCheckoutPage = pathname === "/dashboard/checkout";
+
+  // Role-based access control
+  useEffect(() => {
+    if (isLoading || !user) return;
+
+    // Cashiers can only access checkout page
+    if (user.role === "CASHIER" && !isCheckoutPage && !isStorePage && !isLoginPage && !isRootPage) {
+      router.push("/dashboard/checkout");
+    }
+  }, [user, isLoading, pathname, router, isCheckoutPage, isStorePage, isLoginPage, isRootPage]);
 
   // For unauthenticated users on protected routes, redirect to login
   // Only redirect after we're completely done loading AND there's definitely no user
@@ -58,12 +69,15 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   // Render the main layout if the user is authenticated
   if (user) {
+    const showSidebar = user.role === "ADMIN";
     return (
       <div className="grid min-h-screen grid-rows-[auto_1fr] bg-background">
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        <div className="grid md:grid-cols-[240px_1fr]">
-          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-          <main className="min-w-0">
+        <div className={showSidebar ? "grid md:grid-cols-[240px_1fr]" : ""}>
+          {showSidebar && (
+            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          )}
+          <main className={showSidebar ? "min-w-0" : "w-full"}>
             <ScrollArea className="h-[calc(100vh-4rem)]">
               <div className="w-full">{children}</div>
             </ScrollArea>

@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   Tag,
   X,
+  ShoppingBasket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,11 @@ const routes = [
     icon: BarChart3,
     href: "/analytics",
   },
+  // {
+  //   label: "Checkout",
+  //   icon: ShoppingBasket,
+  //   href: "/dashboard/checkout",
+  // },
   {
     label: "Settings",
     icon: Settings,

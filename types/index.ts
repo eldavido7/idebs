@@ -45,15 +45,17 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
+  firstName?: string;        // Make optional
+  lastName?: string;         // Make optional
+  email?: string;           // Make optional
+  phone?: string;           // Make optional
+  address?: string;         // Make optional
+  city?: string;            // Make optional
+  state?: string;           // Make optional
+  postalCode?: string;      // Make optional
+  country?: string;         // Make optional
+  cashierId?: string;       // Add cashier field
+  cashier?: User;           // Add cashier relation
   items: OrderItem[];
   status: "PENDING" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
   subtotal: number; // Sum of OrderItem.subtotal
@@ -209,6 +211,7 @@ export interface User {
   name: string;
   email: string;
   password?: string; // Optional since it may not be returned in GET responses
+  role: "ADMIN" | "CASHIER";
   lastActive: string;
 }
 

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { User } from "@/types/index";
 import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AddUserModalProps {
   open: boolean;
@@ -44,6 +45,7 @@ export function AddUserModal({
               name: (formData.get("name") as string)?.trim(),
               email: (formData.get("email") as string)?.trim(),
               password: (formData.get("password") as string)?.trim(),
+              role: formData.get("role") as "ADMIN" | "CASHIER",
             };
             if (
               !user.name ||
@@ -80,6 +82,20 @@ export function AddUserModal({
                 className="col-span-3"
                 required
               />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="role" className="text-right">
+                Role
+              </Label>
+              <Select name="role" required>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  <SelectItem value="CASHIER">Cashier</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="password" className="text-right">

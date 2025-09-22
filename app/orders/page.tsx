@@ -65,7 +65,7 @@ export default function OrdersPage() {
         `${order.firstName} ${order.lastName}`
           .toLowerCase()
           .includes(searchQuery.toLowerCase()) ||
-        order.email.toLowerCase().includes(searchQuery.toLowerCase());
+        order.email?.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus =
         statusFilter === null || order.status === statusFilter;
@@ -439,7 +439,16 @@ export default function OrdersPage() {
                           {format(new Date(order.createdAt), "MMM d, yyyy")}
                         </TableCell>
                         <TableCell className="md:w-auto w-[100px] break-all break-words">
-                          {`${order.firstName} ${order.lastName}`}
+                          {order.firstName && order.lastName ? (
+                            `${order.firstName} ${order.lastName}`
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              {/* <span>Checkout Terminal</span> */}
+                              <Badge variant="outline" className="bg-blue-100 text-blue-800 text-xs">
+                                Processed by checkout
+                              </Badge>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-center">
                           <Badge className={getStatusColor(order.status)}>

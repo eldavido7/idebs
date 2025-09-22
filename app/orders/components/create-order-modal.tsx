@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
-import { AlertCircle, Loader2, Plus } from "lucide-react";
+import { Loader2, Minus, Plus } from "lucide-react";
 import type { Order } from "@/types";
 import { useSettingsStore, useStore } from "@/store/store";
 import { useShallow } from "zustand/react/shallow";
@@ -74,6 +74,8 @@ export function CreateOrderModal({
   const [total, setTotal] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [filteredProducts, setFilteredProducts] = useState<typeof products>([]);
 
   useEffect(() => {
     Promise.all([
@@ -89,6 +91,21 @@ export function CreateOrderModal({
       });
     });
   }, []);
+
+  // Filter products based on search
+  useEffect(() => {
+    if (productSearch.length < 2) {
+      setFilteredProducts([]);
+      return;
+    }
+
+    const filtered = products.filter(
+      (p) =>
+        p.title.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.id.toLowerCase().includes(productSearch.toLowerCase())
+    );
+    setFilteredProducts(filtered);
+  }, [productSearch, products]);
 
   const addItemToOrder = () => {
     setSelectedItems([...selectedItems, { productId: "", quantity: 1 }]);
@@ -517,25 +534,47 @@ export function CreateOrderModal({
                       <div className="grid gap-2">
                         <Label>Product</Label>
                         {products.length > 0 ? (
-                          <Select
-                            onValueChange={(value) => {
-                              updateOrderItem(index, "productId", value);
-                            }}
-                            value={item.productId || undefined}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a product" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products
-                                .filter((product) => (product.inventory ?? 0) > 0 || product.variants?.some((v) => v.inventory > 0))
-                                .map((product) => (
-                                  <SelectItem key={product.id} value={product.id}>
-                                    {product.title} - ₦{product.price?.toFixed(2)} ({product.inventory} in stock{variantCount(product)})
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Search by product name or ID"
+                              value={item.productId ?
+                                products.find(p => p.id === item.productId)?.title || item.productId
+                                : productSearch
+                              }
+                              onChange={(e) => {
+                                if (!item.productId) {
+                                  setProductSearch(e.target.value);
+                                }
+                              }}
+                              onFocus={() => {
+                                if (!item.productId) {
+                                  setProductSearch("");
+                                }
+                              }}
+                            />
+                            {!item.productId && filteredProducts.length > 0 && (
+                              <div className="border rounded p-2 max-h-[150px] overflow-y-auto space-y-1">
+                                {filteredProducts
+                                  .filter((product) => (product.inventory ?? 0) > 0 || product.variants?.some((v) => v.inventory > 0))
+                                  .map((product) => (
+                                    <div
+                                      key={product.id}
+                                      className="cursor-pointer hover:bg-muted p-2 rounded text-sm"
+                                      onClick={() => {
+                                        updateOrderItem(index, "productId", product.id);
+                                        setProductSearch("");
+                                        setFilteredProducts([]);
+                                      }}
+                                    >
+                                      <div className="font-medium">{product.title}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        ₦{product.price?.toFixed(2)} • {product.inventory} in stock{variantCount(product)}
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="text-sm text-muted-foreground">
                             No products available. Please add products to the inventory first.
@@ -602,7 +641,7 @@ export function CreateOrderModal({
                         size="icon"
                         onClick={() => removeItemFromOrder(index)}
                       >
-                        <AlertCircle className="h-4 w-4" />
+                        <Minus className="h-4 w-4" />
                       </Button>
                     </div>
 

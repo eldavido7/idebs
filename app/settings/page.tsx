@@ -238,6 +238,7 @@ export default function SettingsPage() {
     try {
       await createUser(userData);
       setIsAddUserOpen(false);
+      fetchSettings();
       toast({
         title: "User added",
         description: "The user has been added successfully.",
@@ -486,6 +487,7 @@ export default function SettingsPage() {
                         Email
                       </TableHead>
                       <TableHead>Last Active</TableHead>
+                      <TableHead>Role</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -513,6 +515,9 @@ export default function SettingsPage() {
                               minute: "2-digit",
                             })}`;
                           })()}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {user.role}
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>

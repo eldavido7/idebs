@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, AlertCircle, Plus, Loader2 } from "lucide-react";
+import { Search, Plus, Loader2, Minus } from "lucide-react";
 import { useStore, useSettingsStore } from "@/store/store";
 import { toast } from "@/components/ui/use-toast";
 import type { Order } from "@/types";
@@ -79,15 +79,15 @@ export function EditOrderModal({
 
   useEffect(() => {
     if (order?.id) {
-      setFirstName(order.firstName);
-      setLastName(order.lastName);
-      setEmail(order.email);
-      setPhone(order.phone);
-      setAddress(order.address);
-      setCity(order.city);
-      setState(order.state);
-      setPostalCode(order.postalCode);
-      setCountry(order.country);
+      setFirstName(order.firstName || "");
+      setLastName(order.lastName || "");
+      setEmail(order.email || "");
+      setPhone(order.phone || "");
+      setAddress(order.address || "");
+      setCity(order.city || "");
+      setState(order.state || "");
+      setPostalCode(order.postalCode || "");
+      setCountry(order.country || "Nigeria");
       setStatus(order.status);
       setSelectedDiscountId(order.discountId || null);
       setSelectedShippingOptionId(order.shippingOptionId || null);
@@ -342,7 +342,6 @@ export function EditOrderModal({
         productId: item.productId,
         variantId: item.variantId || null,
         quantity: item.quantity,
-
       })),
       subtotal,
       shippingCost,
@@ -681,7 +680,7 @@ export function EditOrderModal({
                         size="icon"
                         onClick={() => removeOrderItem(index)}
                       >
-                        <AlertCircle className="h-4 w-4" />
+                        <Minus className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>

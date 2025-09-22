@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "@/components/ui/use-toast";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -29,7 +30,11 @@ export default function LoginPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      router.push("/dashboard");
+      if (user.role === "ADMIN") {
+        router.push("/dashboard");
+      } else if (user.role === "CASHIER") {
+        router.push("/dashboard/checkout");
+      }
     }
   }, [user, router]);
 
@@ -39,11 +44,27 @@ export default function LoginPage() {
 
     const success = await login(email, password);
     if (success) {
-      router.push("/dashboard");
+      // Get the updated user object from the store
+      const currentUser = useAuthStore.getState().user;
+
+      if (currentUser) {
+        toast({
+          title: "Login successful",
+          description: `Welcome ${currentUser.name || currentUser.email}!`,
+        });
+
+        // Redirect based on role
+        if (currentUser.role === "ADMIN") {
+          router.push("/dashboard");
+        } else if (currentUser.role === "CASHIER") {
+          router.push("/dashboard/checkout");
+        }
+      }
     } else {
       setError("Invalid email or password");
     }
   };
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -97,9 +118,12 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="text-center text-sm text-muted-foreground">
+        <CardFooter className="grid text-center text-sm text-muted-foreground">
           <p className="w-full">
             Demo credentials: admin@idebs.com / admin123
+          </p>
+          <p className="w-full">
+            cashier@idebs.com / cash123
           </p>
         </CardFooter>
       </Card>
