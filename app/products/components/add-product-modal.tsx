@@ -88,6 +88,7 @@ export function AddProductModal({
   const [isUploading, setIsUploading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>("");
+  const hasVariants = productForm.variants && productForm.variants.length > 0;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Variants handling ---
@@ -410,8 +411,18 @@ export function AddProductModal({
               }
               className="col-span-3"
               placeholder="0"
+              disabled={hasVariants}
             />
           </div>
+          {hasVariants && (
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-start-2 col-span-3">
+                <p className="text-xs text-muted-foreground">
+                  Price is now controlled by variants. Add prices in the variants section below.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Inventory */}
           <div className="grid grid-cols-4 items-center gap-4">
@@ -431,8 +442,18 @@ export function AddProductModal({
               }
               className="col-span-3"
               placeholder="0"
+              disabled={hasVariants}
             />
           </div>
+          {hasVariants && (
+            <div className="grid grid-cols-4 gap-4">
+              <div className="col-start-2 col-span-3">
+                <p className="text-xs text-muted-foreground">
+                  Inventory is now controlled by variants. Add inventory quantities in the variants section below.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Category */}
           <div className="grid grid-cols-4 items-center gap-4">
@@ -523,7 +544,7 @@ export function AddProductModal({
                     className="col-span-3"
                   />
                   <Input
-                    placeholder="SKU"
+                    placeholder="Barcode(optional)"
                     value={variant.sku || ""}
                     onChange={(e) =>
                       handleVariantChange(variant.id, "sku", e.target.value)
