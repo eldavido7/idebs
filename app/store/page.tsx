@@ -254,7 +254,7 @@ export default function StorePage() {
                     </Badge>
                   </div>
                   <div className="p-4 space-y-1">
-                    <h3 className="font-semibold text-gray-900 text-base leading-tight line-clamp-1">
+                    <h3 className="font-semibold text-base leading-tight line-clamp-1">
                       {product.title}
                     </h3>
                     <p className="text-gray-500 text-sm md:line-clamp-2 line-clamp-1 ">
@@ -264,7 +264,7 @@ export default function StorePage() {
                       {product.variants?.length ? (
                         <>
                           <p className="text-gray-400 text-xs">From</p>
-                          <p className="font-semibold text-gray-900 text-base">
+                          <p className="font-semibold text-[#bd9243] text-base">
                             ₦{Math.min(
                               ...product.variants
                                 .map((v) => v.price)
@@ -275,7 +275,7 @@ export default function StorePage() {
                       ) : (
                         <>
                           <p className="text-gray-400 text-xs">Price</p>
-                          <p className="font-semibold text-gray-900 text-base">
+                          <p className="font-semibold text-[#bd9243] text-base">
                             ₦{product.price?.toLocaleString() ?? 'N/A'}
                           </p>
                         </>
