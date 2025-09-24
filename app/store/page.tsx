@@ -217,7 +217,7 @@ export default function StorePage() {
             No products found
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {currentProducts.map((product) => {
               // For products with variants, check if any variant is in cart
               // For products without variants, check if the product itself is in cart
@@ -229,50 +229,60 @@ export default function StorePage() {
                 <Card
                   key={product.id}
                   onClick={() => handleOpenProduct(product)}
-                  className="overflow-hidden hover:shadow-lg transition cursor-pointer relative"
+                  className="overflow-hidden hover:shadow-lg transition cursor-pointer relative border-0"
                 >
-                  <CardHeader className="p-0">
-                    <div className="relative h-48 w-full bg-gray-100">
-                      <Image
-                        src={product.imageUrl || "/placeholder.svg"}
-                        alt={product.title}
-                        fill
-                        className="object-cover"
-                      />
-                      <Badge
-                        className={cn(
-                          "absolute top-2 right-2",
-                          (product.variants?.length
-                            ? product.variants.reduce((sum, v) => sum + (v.inventory ?? 0), 0)
-                            : product.inventory ?? 0) < 10
-                            ? "bg-red-100 text-red-800"
-                            : "bg-green-100 text-green-800"
-                        )}
-                      >
-                        {product.variants?.length
-                          ? `${product.variants.reduce((sum, v) => sum + (v.inventory ?? 0), 0)} in stock`
-                          : `${product.inventory ?? 0} in stock`}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <h3 className="text-lg font-semibold line-clamp-1">
+                  <div className="aspect-[3/3] relative ">
+                    <Image
+                      src={product.imageUrl || "/placeholder.svg"}
+                      alt={product.title}
+                      fill
+                      className="object-cover"
+                    />
+                    <Badge
+                      className={cn(
+                        "absolute top-2 right-2",
+                        (product.variants?.length
+                          ? product.variants.reduce((sum, v) => sum + (v.inventory ?? 0), 0)
+                          : product.inventory ?? 0) < 10
+                          ? "bg-red-100 text-red-800"
+                          : "bg-green-100 text-green-800"
+                      )}
+                    >
+                      {product.variants?.length
+                        ? `${product.variants.reduce((sum, v) => sum + (v.inventory ?? 0), 0)} in stock`
+                        : `${product.inventory ?? 0} in stock`}
+                    </Badge>
+                  </div>
+                  <div className="p-4 space-y-1">
+                    <h3 className="font-semibold text-gray-900 text-base leading-tight line-clamp-1">
                       {product.title}
                     </h3>
-                    <p className="text-gray-600 text-sm line-clamp-2">
+                    <p className="text-gray-500 text-sm md:line-clamp-2 line-clamp-1 ">
                       {product.description}
                     </p>
-                    <span className="text-xl font-bold text-[#bd9243] block mt-2">
-                      {product.variants?.length
-                        ? `from ₦${Math.min(
-                          ...product.variants
-                            .map((v) => v.price)
-                            .filter((price): price is number => price != null)
-                        ).toLocaleString()}`
-                        : `₦${product.price?.toLocaleString() ?? 'N/A'}`}
-                    </span>
-                  </CardContent>
-                  <CardFooter>
+                    <div className="pt-1">
+                      {product.variants?.length ? (
+                        <>
+                          <p className="text-gray-400 text-xs">From</p>
+                          <p className="font-semibold text-gray-900 text-base">
+                            ₦{Math.min(
+                              ...product.variants
+                                .map((v) => v.price)
+                                .filter((price): price is number => price != null)
+                            ).toLocaleString()}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-gray-400 text-xs">Price</p>
+                          <p className="font-semibold text-gray-900 text-base">
+                            ₦{product.price?.toLocaleString() ?? 'N/A'}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-4 pt-0">
                     <Button
                       className="w-full bg-[#bd9243] hover:bg-[#e3d183]"
                       disabled={productInCart}
@@ -287,7 +297,7 @@ export default function StorePage() {
                     >
                       {productInCart ? "Added to Cart" : "Add to Cart"}
                     </Button>
-                  </CardFooter>
+                  </div>
                 </Card>
               );
             })}
