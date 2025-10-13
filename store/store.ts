@@ -128,12 +128,23 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   deleteProduct: async (id) => {
-    await fetch(`/api/products/${id}`, {
-      method: "DELETE",
-    });
-    set((state) => ({
-      products: state.products.filter((p) => p.id !== id),
-    }));
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete product");
+      }
+
+      set((state) => ({
+        products: state.products.filter((p) => p.id !== id),
+      }));
+    } catch (error) {
+      console.error("[DELETE_PRODUCT]", error);
+      throw error;
+    }
   },
 
   // Orders

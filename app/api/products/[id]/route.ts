@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ProductVariant } from "@prisma/client";
+import { v2 as cloudinary } from "cloudinary";
+
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Extract public_id from Cloudinary URL
+const getPublicIdFromUrl = (url: string): string | null => {
+    if (!url.includes("res.cloudinary.com")) return null;
+    const parts = url.split("/upload/")[1]?.split(".")[0];
+    return parts ? parts.split("/").slice(1).join("/") : null;
+};
 
 // PUT: Update product by ID
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -70,12 +85,34 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
         const params = await context.params;
         const { id } = params;
 
+        // Fetch product to get media fields
+        const product = await prisma.product.findUnique({ where: { id } });
+        if (!product) {
+            return NextResponse.json({ error: "Product not found" }, { status: 404 });
+        }
+
+        // Delete image from Cloudinary if it exists
+        if (product.imagePublicId || product.imageUrl) {
+            const publicId = product.imagePublicId || getPublicIdFromUrl(product.imageUrl ?? "");
+            if (publicId && product.imageUrl?.includes("res.cloudinary.com")) {
+                try {
+                    await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+                    console.log(`[DELETE_PRODUCT_MEDIA] Deleted image: ${publicId}`);
+                } catch (error) {
+                    console.error(`[DELETE_PRODUCT_MEDIA] Failed to delete image ${publicId}:`, error);
+                    // Continue with deletion even if Cloudinary fails
+                }
+            }
+        }
+
+        // Delete product from database
         await prisma.product.delete({
             where: { id },
         });
 
         return NextResponse.json({ message: "Product deleted" });
     } catch (error) {
+        console.error("[DELETE_PRODUCT]", error);
         return NextResponse.json({ error: "Failed to delete product" }, { status: 500 });
     }
 }
