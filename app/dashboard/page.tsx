@@ -416,10 +416,10 @@ export default function Dashboard() {
                           <span>{order.items.length} {order.items.length === 1 ? "item" : "items"}</span>
                           <span>•</span>
                           <span>₦{order.total.toLocaleString()}</span>
-                          {order.discount && (
-                            <span className="text-xs text-muted-foreground italic">
-                              Discount Applied ({order.discount.code || "N/A"})
-                            </span>
+                          {order.items.some(item => !item.product) && (
+                            <Badge variant="outline" className="text-xs">
+                              Contains deleted items
+                            </Badge>
                           )}
                         </div>
                       </div>

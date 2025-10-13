@@ -297,6 +297,7 @@ export function EditOrderModal({
         description: "Please fill in all customer details",
         variant: "destructive",
       });
+      setIsUpdating(false);
       return;
     }
 
@@ -306,6 +307,7 @@ export function EditOrderModal({
         description: "Please fill in all required address details",
         variant: "destructive",
       });
+      setIsUpdating(false);
       return;
     }
 
@@ -315,6 +317,7 @@ export function EditOrderModal({
         description: "Please ensure all items have a valid product",
         variant: "destructive",
       });
+      setIsUpdating(false);
       return;
     }
 
@@ -324,8 +327,31 @@ export function EditOrderModal({
         description: discountError,
         variant: "destructive",
       });
+      setIsUpdating(false);
       return;
     }
+
+    // Calculate subtotal for each item
+    const itemsWithSubtotal = items.map((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      if (!product) {
+        throw new Error(`Product ${item.productId} not found`);
+      }
+
+      const variant = item.variantId
+        ? product.variants?.find((v) => v.id === item.variantId) || null
+        : null;
+
+      const price = variant?.price ?? product.price ?? 0;
+      const itemSubtotal = price * item.quantity;
+
+      return {
+        productId: item.productId,
+        variantId: item.variantId || null,
+        quantity: item.quantity,
+        subtotal: itemSubtotal,
+      };
+    });
 
     const payload: Partial<Order> = {
       firstName,
@@ -338,11 +364,7 @@ export function EditOrderModal({
       postalCode,
       country,
       status: status || "PENDING",
-      items: items.map((item) => ({
-        productId: item.productId,
-        variantId: item.variantId || null,
-        quantity: item.quantity,
-      })),
+      items: itemsWithSubtotal,
       subtotal,
       shippingCost,
       total,
@@ -351,6 +373,7 @@ export function EditOrderModal({
     };
 
     try {
+      console.log("[UPDATE_ORDER] Payload:", JSON.stringify(payload, null, 2));
       await onUpdateOrder(order.id, payload);
       await fetchOrders();
       onOpenChange(false);
@@ -359,7 +382,7 @@ export function EditOrderModal({
         description: `Order #${order.id} has been updated successfully`,
       });
     } catch (err) {
-      console.error("[UPDATE_ORDER]", err);
+      console.error("[UPDATE_ORDER] Full error:", err);
       toast({
         variant: "destructive",
         title: "Error",

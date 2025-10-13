@@ -142,7 +142,7 @@ export default function StorePage() {
     return items.some(
       (item) =>
         item.product.id === product.id &&
-        item.variantId === targetVariantId
+        item.variantId == targetVariantId
     );
   };
 

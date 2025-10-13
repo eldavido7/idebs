@@ -376,7 +376,7 @@ export default function CartPage() {
         },
         items: items.map((item) => ({
           productId: item.product.id,
-          variantId: item.variantId || null,
+          variantId: item.variantId,  // Keep as is (null or string)
           quantity: item.quantity,
           price: item.price,
         })),
@@ -394,11 +394,9 @@ export default function CartPage() {
         currency: "NGN",
         email: customerInfo.email,
         metadata: paystackMetadata,
-        // Replace the existing callback in your handleCheckout function
         callback: (response: { reference: string }) => {
           (async () => {
             try {
-              // First verify the payment
               const verifyRes = await fetch("/api/paystack/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -423,16 +421,18 @@ export default function CartPage() {
                 country: shippingAddress.country,
                 items: items.map((item) => ({
                   productId: item.product.id,
-                  variantId: item.variantId || undefined,
+                  variantId: item.variantId,  // Send null or string directly
                   quantity: item.quantity,
                 })),
-                discountId: appliedDiscount?.id || undefined,
-                shippingOptionId: selectedShippingOptionId,
+                discountId: appliedDiscount?.id || null,
+                shippingOptionId: selectedShippingOptionId || null,
                 shippingCost: shippingCost,
                 paymentReference: response.reference,
                 subtotal: subtotal,
                 total: finalTotal,
               };
+
+              console.log("[ORDER_DATA_BEING_SENT]", orderData); // Add debug log
 
               const orderRes = await fetch("/api/orders", {
                 method: "POST",
@@ -446,6 +446,7 @@ export default function CartPage() {
               }
 
               const order = await orderRes.json();
+              console.log("[CREATED_ORDER]", order); // Add debug log
 
               toast({
                 title: "Payment successful",
@@ -557,7 +558,7 @@ export default function CartPage() {
                           variant="outline"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleQuantityChange(item.product.id, item.variantId, item.quantity - 1)}
+                          onClick={() => handleQuantityChange(item.product.id, item.variantId ?? undefined, item.quantity - 1)}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -566,7 +567,7 @@ export default function CartPage() {
                           variant="outline"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleQuantityChange(item.product.id, item.variantId, item.quantity + 1)}
+                          onClick={() => handleQuantityChange(item.product.id, item.variantId ?? undefined, item.quantity + 1)}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -578,7 +579,7 @@ export default function CartPage() {
                         variant="ghost"
                         size="icon"
                         className="ml-2"
-                        onClick={() => removeItem(item.product.id, item.variantId)}
+                        onClick={() => removeItem(item.product.id, item.variantId ?? undefined)}
                       >
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>

@@ -545,7 +545,14 @@ export default function AnalyticsPage() {
                     {productPerformance.map((product) => (
                       <TableRow key={product.title}>
                         <TableCell className="font-medium">
-                          {product.title}
+                          <div className="flex items-center gap-2">
+                            {product.title}
+                            {product.title.includes('[Deleted') && (
+                              <Badge variant="outline" className="text-xs">
+                                Deleted
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           {product.sales}

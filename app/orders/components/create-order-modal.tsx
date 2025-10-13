@@ -283,7 +283,7 @@ export function CreateOrderModal({
       status: "PENDING" as Order["status"],
       items: selectedItems.map((item) => ({
         productId: item.productId,
-        variantId: item.variantId || null,
+        variantId: item.variantId ?? null,  // Ensure it's null, not undefined
         quantity: item.quantity,
       })),
       discountId: selectedDiscountId !== "none" ? selectedDiscountId : null,

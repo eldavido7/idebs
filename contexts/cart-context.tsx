@@ -13,11 +13,12 @@ import { useToast } from "@/hooks/use-toast";
 // Cart item type (variant-aware)
 export type CartItem = {
   product: Product;
-  variantId?: string;
+  variantId: string | null;  // Changed from optional to explicit null
   variantName?: string;
-  price: number; // effective price (variant or product)
+  price: number;
   quantity: number;
 };
+
 
 // Cart state
 type CartState = {
@@ -67,7 +68,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
 
     case "ADD_ITEM": {
       const { product, quantity, variant } = action.payload;
-      const variantId = variant?.id ?? undefined;
+      const variantId = variant?.id ?? null;  // Changed to null instead of undefined
       const effectivePrice = (variant?.price ?? product.price ?? 0) as number;
 
       const existingIndex = state.items.findIndex(
@@ -84,7 +85,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
           ...state.items,
           {
             product,
-            variantId,
+            variantId,  // Now explicitly null or string
             variantName: variant?.name ?? undefined,
             price: effectivePrice,
             quantity,
@@ -98,18 +99,19 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     case "REMOVE_ITEM": {
       const { productId, variantId } = action.payload;
       const items = state.items.filter(
-        (it) => !(it.product.id === productId && it.variantId === (variantId ?? undefined))
+        (it) => !(it.product.id === productId && it.variantId === (variantId ?? null))
       );
       return { items, ...calculateTotals(items) };
     }
 
+
     case "UPDATE_QUANTITY": {
       const { productId, variantId, quantity } = action.payload;
       if (quantity <= 0) {
-        return cartReducer(state, { type: "REMOVE_ITEM", payload: { productId, variantId } });
+        return cartReducer(state, { type: "REMOVE_ITEM", payload: { productId, variantId: variantId ?? undefined } });
       }
       const items = state.items.map((it) =>
-        it.product.id === productId && it.variantId === (variantId ?? undefined)
+        it.product.id === productId && it.variantId === (variantId ?? null)
           ? { ...it, quantity }
           : it
       );

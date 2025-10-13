@@ -398,7 +398,11 @@ export const useStore = create<StoreState>((set, get) => ({
         body: JSON.stringify(updated),
       });
 
-      if (!res.ok) throw new Error("Failed to update order");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        console.error("[UPDATE_ORDER] API Error:", errorData);
+        throw new Error(errorData.error || "Failed to update order");
+      }
       const updatedOrderResponse = await res.json();
       set((state) => ({
         orders: state.orders.map((o) =>
@@ -475,8 +479,7 @@ export const useStore = create<StoreState>((set, get) => ({
 }))
 
 export function getTopProducts(orders: OrderWithItems[]) {
-  const productStats: Record<
-    string,
+  const productStats: Record<string,
     {
       title: string;
       totalSold: number;
@@ -489,9 +492,44 @@ export function getTopProducts(orders: OrderWithItems[]) {
     if (order.status !== "DELIVERED") return;
 
     order.items.forEach((item) => {
+      // Handle deleted products gracefully
+      if (!item.product) {
+        console.warn(`Order item missing product reference (likely deleted):`, item);
+
+        // Use productId as fallback if available
+        const productId = item.productId || 'unknown';
+        if (!productStats[productId]) {
+          productStats[productId] = {
+            title: `[Deleted Product]`,
+            totalSold: 0,
+            totalRevenue: 0,
+            variantBreakdown: {},
+          };
+        }
+
+        // Use subtotal from order item as fallback
+        const itemRevenue = item.subtotal || 0;
+        productStats[productId].totalSold += item.quantity;
+        productStats[productId].totalRevenue += itemRevenue;
+        return;
+      }
+
       const productId = item.product.id;
-      const effectivePrice = item.variant?.price ?? item.product.price ?? 0;
-      const itemRevenue = effectivePrice * item.quantity;
+
+      // CRITICAL: Calculate revenue from item.subtotal first (most reliable), 
+      // then fall back to calculated price
+      let effectivePrice = 0;
+      let itemRevenue = 0;
+
+      if (item.subtotal && item.subtotal > 0) {
+        // Use subtotal directly - this is the actual price paid
+        itemRevenue = item.subtotal;
+        effectivePrice = item.quantity > 0 ? item.subtotal / item.quantity : 0;
+      } else {
+        // Fallback: calculate from variant/product price
+        effectivePrice = item.variant?.price ?? item.product.price ?? 0;
+        itemRevenue = effectivePrice * item.quantity;
+      }
 
       // Initialize product stats if not exists
       if (!productStats[productId]) {
@@ -503,21 +541,30 @@ export function getTopProducts(orders: OrderWithItems[]) {
         };
       }
 
-      // Update product totals
+      // ALWAYS update product totals regardless of variant
       productStats[productId].totalSold += item.quantity;
       productStats[productId].totalRevenue += itemRevenue;
 
-      // Track variant-specific stats if variant exists
-      if (item.variant && item.variantId) {
-        if (!productStats[productId].variantBreakdown![item.variantId]) {
-          productStats[productId].variantBreakdown![item.variantId] = {
-            name: item.variant.name || `Variant ${item.variantId.slice(0, 8)}`,
+      // Track variant-specific stats if variant exists OR if variantId exists
+      if (item.variantId) {
+        const variantKey = item.variantId;
+
+        if (!productStats[productId].variantBreakdown![variantKey]) {
+          // Determine variant name
+          let variantName = '[Deleted Variant]';
+          if (item.variant) {
+            variantName = item.variant.name || `Variant ${item.variantId.slice(0, 8)}`;
+          }
+
+          productStats[productId].variantBreakdown![variantKey] = {
+            name: variantName,
             sold: 0,
             revenue: 0,
           };
         }
-        productStats[productId].variantBreakdown![item.variantId].sold += item.quantity;
-        productStats[productId].variantBreakdown![item.variantId].revenue += itemRevenue;
+
+        productStats[productId].variantBreakdown![variantKey].sold += item.quantity;
+        productStats[productId].variantBreakdown![variantKey].revenue += itemRevenue;
       }
     });
   });
@@ -567,8 +614,7 @@ export function getSalesData(orders: AnalyticsOrder[]): SalesData[] {
   }));
 }
 export function getVariantAnalytics(orders: OrderWithItems[]) {
-  const variantStats: Record<
-    string,
+  const variantStats: Record<string,
     {
       productTitle: string;
       variantName: string;
@@ -582,16 +628,41 @@ export function getVariantAnalytics(orders: OrderWithItems[]) {
     if (order.status !== "DELIVERED") return;
 
     order.items.forEach((item) => {
-      if (!item.variant || !item.variantId) return; // Skip items without variants
+      // Only process items with variants
+      if (!item.variantId) return;
 
-      const variantKey = `${item.product.id}-${item.variantId}`;
-      const effectivePrice = item.variant.price ?? item.product.price ?? 0;
-      const itemRevenue = effectivePrice * item.quantity;
+      const variantKey = `${item.productId || 'unknown'}-${item.variantId}`;
+
+      // Handle deleted products
+      const productTitle = item.product?.title || '[Deleted Product]';
+
+      // Handle deleted variants and calculate price
+      let variantName = '[Deleted Variant]';
+      let effectivePrice = 0;
+      let itemRevenue = 0;
+
+      // Use subtotal first (most reliable)
+      if (item.subtotal && item.subtotal > 0) {
+        itemRevenue = item.subtotal;
+        effectivePrice = item.quantity > 0 ? item.subtotal / item.quantity : 0;
+      } else {
+        // Fallback to calculated price
+        if (item.variant) {
+          effectivePrice = item.variant.price ?? item.product?.price ?? 0;
+        } else if (item.product) {
+          effectivePrice = item.product.price ?? 0;
+        }
+        itemRevenue = effectivePrice * item.quantity;
+      }
+
+      if (item.variant) {
+        variantName = item.variant.name || `Variant ${item.variantId.slice(0, 8)}`;
+      }
 
       if (!variantStats[variantKey]) {
         variantStats[variantKey] = {
-          productTitle: item.product.title,
-          variantName: item.variant.name || `Variant ${item.variantId.slice(0, 8)}`,
+          productTitle,
+          variantName,
           totalSold: 0,
           totalRevenue: 0,
           averagePrice: effectivePrice,
@@ -614,8 +685,7 @@ export function getVariantAnalytics(orders: OrderWithItems[]) {
 }
 
 export function getCategoryAnalytics(products: Product[], orders: OrderWithItems[]) {
-  const categoryStats: Record<
-    string,
+  const categoryStats: Record<string,
     {
       name: string;
       productCount: number;
@@ -644,14 +714,46 @@ export function getCategoryAnalytics(products: Product[], orders: OrderWithItems
     if (order.status !== "DELIVERED") return;
 
     order.items.forEach((item) => {
-      const category = item.product.category;
-      const effectivePrice = item.variant?.price ?? item.product.price ?? 0;
-      const itemRevenue = effectivePrice * item.quantity;
+      // Handle deleted products gracefully
+      if (!item.product) {
+        console.warn(`Order item missing product reference (likely deleted):`, item);
 
-      if (categoryStats[category]) {
+        const category = "Uncategorized";
+        const itemRevenue = item.subtotal || 0;
+
+        // Initialize category if it doesn't exist
+        if (!categoryStats[category]) {
+          categoryStats[category] = {
+            name: category,
+            productCount: 0,
+            totalRevenue: 0,
+            totalUnitsSold: 0,
+            averagePrice: 0,
+          };
+        }
+
         categoryStats[category].totalRevenue += itemRevenue;
         categoryStats[category].totalUnitsSold += item.quantity;
+        return;
       }
+
+      const category = item.product.category ?? "Uncategorized";
+      const effectivePrice = item.variant?.price ?? item.product.price ?? 0;
+      const itemRevenue = item.subtotal || (effectivePrice * item.quantity);
+
+      // Initialize category if it doesn't exist
+      if (!categoryStats[category]) {
+        categoryStats[category] = {
+          name: category,
+          productCount: 0,
+          totalRevenue: 0,
+          totalUnitsSold: 0,
+          averagePrice: 0,
+        };
+      }
+
+      categoryStats[category].totalRevenue += itemRevenue;
+      categoryStats[category].totalUnitsSold += item.quantity;
     });
   });
 

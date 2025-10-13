@@ -50,12 +50,12 @@ export async function PATCH(
             discountId,
             shippingOptionId,
             shippingCost,
-            paymentReference,
             subtotal: providedSubtotal,
             total: providedTotal,
+            // paymentReference is now completely excluded - never updated
         } = data;
 
-        // Basic field validation (unchanged)
+        // Basic field validation
         if (
             (firstName !== undefined && !firstName) ||
             (lastName !== undefined && !lastName) ||
@@ -74,17 +74,28 @@ export async function PATCH(
             return NextResponse.json({ error: "Invalid status" }, { status: 400 });
         }
 
+        // Fetch existing order OUTSIDE transaction
         const existingOrder = await prisma.order.findUnique({
             where: { id },
-            include: { items: true, discount: true, shippingOption: true },
+            include: {
+                items: {
+                    include: {
+                        product: true,
+                        variant: true,
+                    }
+                },
+                discount: true,
+                shippingOption: true
+            },
         });
 
         if (!existingOrder) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
 
+        // Process and validate items OUTSIDE transaction
         let calculatedSubtotal = 0;
-        let orderItems: { productId: string; variantId?: string; quantity: number; subtotal: number }[] = [];
+        let orderItems: { productId: string; variantId: string | null; quantity: number; subtotal: number }[] = [];
 
         if (items.length > 0) {
             for (const item of items) {
@@ -94,20 +105,19 @@ export async function PATCH(
 
                 const product = await prisma.product.findUnique({
                     where: { id: item.productId },
+                    include: { variants: true },
                 });
 
                 if (!product) {
                     return NextResponse.json({ error: `Product ${item.productId} not found` }, { status: 404 });
                 }
 
-                const variant = item.variantId
-                    ? await prisma.productVariant.findUnique({
-                        where: { id: item.variantId },
-                    })
-                    : null;
-
-                if (item.variantId && !variant) {
-                    return NextResponse.json({ error: `Variant ${item.variantId} not found` }, { status: 404 });
+                let variant = null;
+                if (item.variantId) {
+                    variant = product.variants?.find((v) => v.id === item.variantId);
+                    if (!variant) {
+                        return NextResponse.json({ error: `Variant ${item.variantId} not found` }, { status: 404 });
+                    }
                 }
 
                 const unitPrice = variant?.price ?? product.price;
@@ -120,7 +130,7 @@ export async function PATCH(
 
                 orderItems.push({
                     productId: item.productId,
-                    variantId: item.variantId,
+                    variantId: item.variantId || null,
                     quantity: item.quantity,
                     subtotal: itemSubtotal,
                 });
@@ -133,6 +143,7 @@ export async function PATCH(
             return NextResponse.json({ error: "Provided subtotal does not match calculated subtotal" }, { status: 400 });
         }
 
+        // Validate shipping OUTSIDE transaction
         let calculatedShippingCost = 0;
         let shippingOptionIdToUse = shippingOptionId !== undefined ? shippingOptionId : existingOrder.shippingOptionId;
         if (shippingOptionIdToUse) {
@@ -150,7 +161,7 @@ export async function PATCH(
             return NextResponse.json({ error: "Shipping cost provided without shipping option" }, { status: 400 });
         }
 
-        // ---------- Discount handling (supports products AND variants) ----------
+        // Validate discount OUTSIDE transaction
         let discount: Discount | null = null;
         let discountAmount = 0;
         let total = calculatedSubtotal + calculatedShippingCost;
@@ -159,7 +170,7 @@ export async function PATCH(
         if (discountIdToUse) {
             discount = await prisma.discount.findUnique({
                 where: { id: discountIdToUse },
-                include: { products: true, variants: true }, // <-- include variants
+                include: { products: true, variants: true },
             });
 
             if (
@@ -176,11 +187,15 @@ export async function PATCH(
                 return NextResponse.json({ error: "Order subtotal below minimum for discount" }, { status: 400 });
             }
 
-            // Build final items used for discount applicability (either updated items or existing items)
-            const finalItemsForCheck: { productId: string; variantId?: string; subtotal: number }[] =
+            // Build final items used for discount applicability
+            const finalItemsForCheck: { productId: string; variantId: string | null; subtotal: number }[] =
                 items.length > 0
                     ? orderItems.map(it => ({ productId: it.productId, variantId: it.variantId, subtotal: it.subtotal }))
-                    : existingOrder.items.map((it: any) => ({ productId: it.productId, variantId: (it as any).variantId ?? undefined, subtotal: it.subtotal }));
+                    : existingOrder.items.map(it => ({
+                        productId: it.productId || '',
+                        variantId: it.variantId,
+                        subtotal: it.subtotal
+                    }));
 
             const discountProductIds = (discount.products ?? []).map(p => p.id);
             const discountVariantIds = (discount.variants ?? []).map(v => v.id);
@@ -190,7 +205,6 @@ export async function PATCH(
                 const matchesProduct = discountProductIds.length > 0 && discountProductIds.includes(it.productId);
                 const matchesVariant = it.variantId && discountVariantIds.length > 0 && discountVariantIds.includes(it.variantId);
                 if (discountProductIds.length === 0 && discountVariantIds.length === 0) {
-                    // global discount
                     applicableSubtotal += it.subtotal;
                 } else if (matchesProduct || matchesVariant) {
                     applicableSubtotal += it.subtotal;
@@ -224,39 +238,79 @@ export async function PATCH(
             total = calculatedSubtotal + calculatedShippingCost;
         }
 
-        // ---------- end discount handling ----------
-
         if (providedTotal !== undefined && providedTotal !== total) {
             return NextResponse.json({ error: "Provided total does not match calculated total" }, { status: 400 });
         }
 
-        if (paymentReference !== undefined && paymentReference !== existingOrder.paymentReference) {
-            const existingOrderWithReference = await prisma.order.findFirst({
-                where: { paymentReference },
-            });
-            if (existingOrderWithReference && existingOrderWithReference.id !== id) {
-                return NextResponse.json({ error: "Payment reference already used" }, { status: 400 });
+        // REMOVED: Payment reference validation - we never update it
+
+        // Determine status transitions OUTSIDE transaction
+        const newStatus = status ?? existingOrder.status;
+        const isBecomingShippedOrDelivered =
+            (newStatus === "SHIPPED" || newStatus === "DELIVERED") &&
+            existingOrder.status !== "SHIPPED" &&
+            existingOrder.status !== "DELIVERED";
+
+        const isLeavingShippedOrDelivered =
+            (existingOrder.status === "SHIPPED" || existingOrder.status === "DELIVERED") &&
+            newStatus !== "SHIPPED" &&
+            newStatus !== "DELIVERED";
+
+        // Determine final items for inventory operations
+        const finalItems: { productId: string; variantId: string | null; quantity: number }[] =
+            items.length > 0
+                ? orderItems
+                : existingOrder.items.map(it => ({
+                    productId: it.productId || '',
+                    variantId: it.variantId,
+                    quantity: it.quantity,
+                }));
+
+        // Validate inventory availability OUTSIDE transaction
+        if (isBecomingShippedOrDelivered) {
+            for (const item of finalItems) {
+                const product = await prisma.product.findUnique({
+                    where: { id: item.productId },
+                    include: { variants: true },
+                });
+
+                if (!product) {
+                    return NextResponse.json({ error: `Product ${item.productId} not found` }, { status: 404 });
+                }
+
+                const availableInventory = item.variantId
+                    ? product.variants?.find((v) => v.id === item.variantId)?.inventory ?? 0
+                    : product.inventory ?? 0;
+
+                if (availableInventory < item.quantity) {
+                    const variant = product.variants?.find((v) => v.id === item.variantId);
+                    const itemName = variant
+                        ? `${product.title} (${variant.name})`
+                        : product.title;
+                    return NextResponse.json(
+                        {
+                            error: `${itemName} is out of stock. Available: ${availableInventory}, Required: ${item.quantity}`,
+                        },
+                        { status: 400 }
+                    );
+                }
             }
         }
 
-        // Begin transaction for updates + inventory changes
+        // NOW do the transaction with ONLY database writes
         const updatedOrder = await prisma.$transaction(async (tx) => {
             // If items provided, replace them
             if (items.length > 0) {
                 await tx.orderItem.deleteMany({ where: { orderId: id } });
-                await Promise.all(
-                    orderItems.map(item =>
-                        tx.orderItem.create({
-                            data: {
-                                orderId: id,
-                                productId: item.productId,
-                                variantId: item.variantId ?? null,
-                                quantity: item.quantity,
-                                subtotal: item.subtotal,
-                            },
-                        })
-                    )
-                );
+                await tx.orderItem.createMany({
+                    data: orderItems.map(item => ({
+                        orderId: id,
+                        productId: item.productId,
+                        variantId: item.variantId,
+                        quantity: item.quantity,
+                        subtotal: item.subtotal,
+                    })),
+                });
             }
 
             // Update discount usage if discount changed
@@ -266,26 +320,6 @@ export async function PATCH(
                     data: { usageCount: { increment: 1 } },
                 });
             }
-
-            // Determine status transitions
-            const isBecomingShippedOrDelivered =
-                (status === "SHIPPED" || status === "DELIVERED") &&
-                existingOrder.status !== "SHIPPED" &&
-                existingOrder.status !== "DELIVERED";
-
-            const isLeavingShippedOrDelivered =
-                (existingOrder.status === "SHIPPED" || existingOrder.status === "DELIVERED") &&
-                status !== "SHIPPED" &&
-                status !== "DELIVERED";
-
-            // Final items: if updated, use orderItems (recently computed), else use existingOrder.items
-            const finalItems = items.length > 0
-                ? orderItems
-                : existingOrder.items.map((it: any) => ({
-                    productId: it.productId,
-                    variantId: (it as any).variantId ?? undefined,
-                    quantity: it.quantity,
-                }));
 
             // Inventory operations (variant-aware, with product sync)
             if (isBecomingShippedOrDelivered) {
@@ -301,7 +335,7 @@ export async function PATCH(
                             where: { productId: item.productId },
                             _sum: { inventory: true },
                         });
-                        const newSum = (sum._sum.inventory ?? 0);
+                        const newSum = sum._sum.inventory ?? 0;
                         await tx.product.update({
                             where: { id: item.productId },
                             data: { inventory: newSum },
@@ -326,7 +360,7 @@ export async function PATCH(
                             where: { productId: item.productId },
                             _sum: { inventory: true },
                         });
-                        const newSum = (sum._sum.inventory ?? 0);
+                        const newSum = sum._sum.inventory ?? 0;
                         await tx.product.update({
                             where: { id: item.productId },
                             data: { inventory: newSum },
@@ -340,26 +374,26 @@ export async function PATCH(
                 }
             }
 
-            // Update and return order
+            // Update and return order (paymentReference is preserved automatically)
             return tx.order.update({
                 where: { id },
                 data: {
-                    firstName,
-                    lastName,
-                    email,
-                    phone,
-                    address,
-                    city,
-                    state,
-                    postalCode,
-                    country,
-                    status,
+                    firstName: firstName ?? existingOrder.firstName,
+                    lastName: lastName ?? existingOrder.lastName,
+                    email: email ?? existingOrder.email,
+                    phone: phone ?? existingOrder.phone,
+                    address: address ?? existingOrder.address,
+                    city: city ?? existingOrder.city,
+                    state: state ?? existingOrder.state,
+                    postalCode: postalCode ?? existingOrder.postalCode,
+                    country: country ?? existingOrder.country,
+                    status: newStatus,
                     subtotal: calculatedSubtotal,
                     shippingOptionId: shippingOptionIdToUse,
                     shippingCost: calculatedShippingCost,
                     total,
                     discountId: discountIdToUse,
-                    paymentReference,
+                    // paymentReference is NOT included - it will remain unchanged
                 },
                 include: {
                     items: { include: { product: true, variant: true } },
@@ -367,7 +401,7 @@ export async function PATCH(
                     shippingOption: true,
                 },
             });
-        });
+        }, { timeout: 15000 });
 
         return NextResponse.json(updatedOrder);
     } catch (error) {
