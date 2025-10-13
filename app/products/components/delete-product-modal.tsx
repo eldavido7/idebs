@@ -35,17 +35,19 @@ export function DeleteProductModal({
     if (!product) return;
     setLoading(true);
 
-    // Check if product is used in any orders
-    const productInOrders = orders.some((order) =>
+    // Check if product is used in any PENDING or PROCESSING orders
+    const productInActiveOrders = orders.some((order) =>
       order.items.some(
-        (item) => item.productId === product.id || item.variantId === product.id
+        (item) =>
+          (item.productId === product.id || item.variantId === product.id) &&
+          !["SHIPPED", "DELIVERED", "CANCELLED"].includes(order.status)
       )
     );
 
-    if (productInOrders) {
+    if (productInActiveOrders) {
       toast({
         title: "Cannot Delete Product",
-        description: "This product is used in orders and cannot be deleted.",
+        description: "This product is part of pending or processing orders and cannot be deleted.",
         variant: "destructive",
       });
       setLoading(false);
@@ -53,23 +55,19 @@ export function DeleteProductModal({
     }
 
     try {
-      const res = await fetch(`/api/products/${product.id}`, {
-        method: "DELETE",
-      });
+      // Just call the store function - it handles the API call
+      await onDeleteProduct(product.id);
 
-      if (!res.ok) throw new Error("Failed to delete product");
-
-      onDeleteProduct(product.id);
       toast({
         title: "Product Deleted",
-        description: `${product.title} has been deleted.`,
+        description: `${product.title} has been deleted successfully.`,
       });
       onOpenChange(false);
     } catch (error) {
       console.error(error);
       toast({
         title: "Error",
-        description: "There was a problem deleting the product.",
+        description: error instanceof Error ? error.message : "There was a problem deleting the product.",
         variant: "destructive",
       });
     } finally {

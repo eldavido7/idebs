@@ -86,9 +86,34 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
         const { id } = params;
 
         // Fetch product to get media fields
-        const product = await prisma.product.findUnique({ where: { id } });
+        const product = await prisma.product.findUnique({
+            where: { id },
+            include: {
+                orderItems: {
+                    include: {
+                        order: {
+                            select: {
+                                status: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         if (!product) {
             return NextResponse.json({ error: "Product not found" }, { status: 404 });
+        }
+
+        // Check if product is in any non-shipped/non-delivered orders
+        const hasActiveOrders = product.orderItems.some(
+            item => !["SHIPPED", "DELIVERED", "CANCELLED"].includes(item.order.status)
+        );
+
+        if (hasActiveOrders) {
+            return NextResponse.json({
+                error: "Cannot delete product. It is part of pending or processing orders."
+            }, { status: 400 });
         }
 
         // Delete image from Cloudinary if it exists
@@ -105,12 +130,12 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
             }
         }
 
-        // Delete product from database
+        // Delete product from database (will cascade delete variants and orderItems)
         await prisma.product.delete({
             where: { id },
         });
 
-        return NextResponse.json({ message: "Product deleted" });
+        return NextResponse.json({ message: "Product deleted successfully" });
     } catch (error) {
         console.error("[DELETE_PRODUCT]", error);
         return NextResponse.json({ error: "Failed to delete product" }, { status: 500 });

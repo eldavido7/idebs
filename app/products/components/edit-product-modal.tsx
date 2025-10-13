@@ -149,22 +149,22 @@ export function EditProductModal({
     if (!product) return;
 
     try {
-      const res = await fetch(`/api/products/${product.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productForm),
-      });
+      // Just call the store function - it handles the API call and state update
+      await onUpdateProduct(product.id, productForm);
 
-      if (!res.ok) throw new Error("Failed to update product");
-
-      const updatedProduct: Product = await res.json();
-      onUpdateProduct(product.id, updatedProduct);
       onOpenChange(false);
 
-      toast({ title: "Product Updated", description: `${updatedProduct.title} has been updated successfully.` });
+      toast({
+        title: "Product Updated",
+        description: `${productForm.title} has been updated successfully.`
+      });
     } catch (error) {
       console.error(error);
-      toast({ title: "Error", description: "There was a problem updating the product.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "There was a problem updating the product.",
+        variant: "destructive"
+      });
     } finally {
       setIsSaving(false);
     }

@@ -71,16 +71,31 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   updateProduct: async (id, updatedProduct) => {
-    await fetch(`/api/products/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(updatedProduct),
-      headers: { "Content-Type": "application/json" },
-    });
-    set((state) => ({
-      products: state.products.map((p) =>
-        p.id === id ? { ...p, ...updatedProduct } : p
-      ),
-    }));
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(updatedProduct),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update product");
+      }
+
+      const returnedProduct = await res.json();
+
+      set((state) => ({
+        products: state.products.map((p) =>
+          p.id === id ? returnedProduct : p
+        ),
+      }));
+
+      return returnedProduct;
+    } catch (error) {
+      console.error("[UPDATE_PRODUCT]", error);
+      throw error;
+    }
   },
 
   updateVariant: async (productId: string, variantId: string, data: { inventory?: number }) => {

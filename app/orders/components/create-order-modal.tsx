@@ -585,7 +585,7 @@ export function CreateOrderModal({
                         <div className="grid gap-2">
                           <Label>Variant</Label>
                           <Select
-                            onValueChange={(value) => updateOrderItem(index, "variantId", value === "none" ? undefined : value)}
+                            onValueChange={(value) => updateOrderItem(index, "variantId", value === "none" ? "" : value)}
                             value={item.variantId || "none"}
                           >
                             <SelectTrigger>
